@@ -1,0 +1,134 @@
+import cv2
+import mediapipe as mp
+
+
+class DetectorMaos:
+    def __init__(self, modo=False, max_maos=2, deteccao_confianca=0.5, rastreio_confianca=0.5, cor_pontos=(0, 255, 0), cor_linhas=(0, 0, 255)):
+
+        """ 
+        Função responsavel por inicializar a classe DetectorMaos
+        :param modo: Modo de detecção (True para detecção contínua, False para detecção única)
+        :param max_maos: Número máximo de mãos a serem detectadas
+        :param deteccao_confianca: Percentual mínimo de confiança para considerar uma mão detectada. Se for menor que esse valor, a mão não será considerada detectada
+        :param rastreio_confianca: Percentual da taxa de rastreio para considerar uma mão rastreada. Se for menor que esse valor, o rastreio dos pontos não será realizado
+        :param cor_pontos: Cor dos pontos de referência das mãos (BGR)
+        :param cor_linhas: Cor das linhas que conectam os pontos de referência das mãos
+        """
+
+
+
+        self.modo = modo
+        self.max_maos = max_maos
+        self.deteccao_confianca = deteccao_confianca
+        self.rastreio_confianca = rastreio_confianca
+        self.cor_pontos = cor_pontos
+        self.cor_linhas = cor_linhas
+
+        # Inicializa o módulo de detecção de mãos do MediaPipe
+        self.maos_mp = mp.solutions.hands
+        self.maos = self.maos_mp.Hands(
+            self.modo, 
+            self.max_maos,
+            1, 
+            self.deteccao_confianca, 
+            self.rastreio_confianca
+            )
+
+        # função para desenhar os pontos de referência das mãos
+        self.mp_desenho = mp.solutions.drawing_utils
+
+        # configurações do desenho dos pontos de referência das mãos
+        self.desenho_config = self.mp_desenho.DrawingSpec(color=self.cor_pontos)
+
+        # configurações do desenho das linhas que conectam os pontos de referência das mãos
+        self.linhas_config = self.mp_desenho.DrawingSpec(color=self.cor_linhas)
+
+    def encontrar_maos(self, imagem, desenho=True):
+        """
+        Função responsável por encontrar as mãos na imagem
+        :param imagem: Imagem onde as mãos serão detectadas
+        :param desenho: Se True, desenha os pontos de referência das mãos na imagem
+        :return: Imagem com as mãos detectadas (se desenho=True) e a lista de pontos de referência das mãos
+        """
+
+        # Converte a imagem para RGB
+        imagem_rgb = cv2.cvtColor(imagem, cv2.COLOR_BGR2RGB)
+
+        # Processa a imagem para encontrar as mãos
+        self.resultados = self.maos.process(imagem_rgb)
+
+        # Se houver mãos detectadas
+        if self.resultados.multi_hand_landmarks:
+            for pontos in self.resultados.multi_hand_landmarks:
+                if desenho:
+                    # Desenha os pontos de referência das mãos na imagem
+                    self.desenho_mp.draw_landmarks(
+                        imagem, 
+                        pontos, 
+                        self.maos_mp.HAND_CONNECTIONS, 
+                        self.desenho_config, 
+                        self.linhas_config)
+
+        return imagem        
+
+    def encontrarPontos(self, imagem, mao_num=0, desenho=True, cor=(255,0,255), raio=7, ponto_detectado=0):
+        """
+        Função responsável por encontrar os pontos de referência das mãos na imagem
+        :param imagem: Imagem capturada
+        :param mao_num: Número da mão a ser analisada (0 para a primeira mão, 1 para a segunda mão, etc.)
+        :param desenho: desenhar o ponto encontrado
+        :param cor: Cor dos pontos de referência das mãos (BGR)
+        :param raio: Raio do circulo do ponto
+        :param ponto_detectado: Ponto a ser detectado
+        :return: Lista com pontos detectados
+        """
+
+        # Lista com os pontos detectados
+        lista_pontos = []
+
+        # Verifica se alguma mão foi detectada
+        if self.resultados.multi_hand_landmarks:
+            # Obter os pontos da mão detectada, não de todas
+            mao = self.resultados.multi_hand_landmarks[mao_num]
+
+            # Obter as informações de cada ponto da mão
+            for id, ponto in enumerate(mao.landmark):
+
+                # Obter as dimensões da imagem
+                altura, largura, _ = imagem.shape
+                centro_X, centro_Y = int(ponto.x * largura), int(ponto.y * altura)
+                lista_pontos.append([id, centro_X, centro_Y])
+
+                # Desenhar o ponto na imagem
+                if desenho:
+                    if id == ponto_detectado:
+                        cv2.circle(
+                            imagem, 
+                            (centro_X, centro_Y),
+                            raio, 
+                            cor, 
+                            cv2.FILLED
+                            )
+
+        return lista_pontos
+
+def main():
+    cap = cv2.VideoCapture(0)
+
+    detector = DetectorMaos(cor_pontos=(0, 255, 0), cor_linhas=(0, 0, 255))
+
+    while True:
+        _, imagem = cap.read()
+
+        imagem = cv2.flip(imagem, 1)
+
+        imagem = detector.encontrar_maos(imagem)
+
+        lista_pontos = detector.encontrarPontos(imagem, mao_num=0, desenho=True)
+
+        cv2.imshow("Captura", imagem)
+
+        cv2.waitKey(1)
+
+if __name__ == "__main__":
+    main()
