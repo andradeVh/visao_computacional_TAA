@@ -41,8 +41,3 @@ python detector_maos.py
 
 ```
 
-```
-
-Os passos de 1 a 3 foram preservados e corrigidos ortograficamente a partir do seu arquivo original.
-
-```
