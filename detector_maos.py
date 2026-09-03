@@ -6,15 +6,16 @@ from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 
 class DetectorMaos:
-    def __init__(self, modo=False, max_maos=2, deteccao_confianca=0.5, rastreio_confianca=0.5, cor_pontos=(0, 255, 0), cor_linhas=(0, 0, 255)):
+    def __init__(self, modo=False, max_maos=2, deteccao_confianca=0.5, rastreio_confianca=0.5, cor_pontos=(0, 255, 0), cor_linhas=(0, 0, 255), raio_ponto=5):
         """ 
         Função responsável por inicializar a classe DetectorMaos
         :param modo: Modo de detecção (True para detecção contínua, False para detecção única)
         :param max_maos: Número máximo de mãos a serem detectadas
-        :param deteccao_confianca: Percentual mínimo de confiança para considerar uma mão detectada. Se for menor que esse valor, a mão não será considerada detectada
+        :param deteccao_confianca: Percentual mínimo de confiança para considerar uma mão detectada. Se for menor que esse valor, a mão será considerada detectada
         :param rastreio_confianca: Percentual da taxa de rastreio para considerar uma mão rastreada. Se for menor que esse valor, o rastreio dos pontos não será realizado
         :param cor_pontos: Cor dos pontos de referência das mãos (BGR)
         :param cor_linhas: Cor das linhas que conectam os pontos de referência das mãos
+        :param raio_ponto: Raio padrão dos círculos desenhados nos pontos de referência
         """
         self.modo = modo
         self.max_maos = max_maos
@@ -22,6 +23,7 @@ class DetectorMaos:
         self.rastreio_confianca = rastreio_confianca
         self.cor_pontos = cor_pontos
         self.cor_linhas = cor_linhas
+        self.raio_ponto = raio_ponto
         
         # Inicialização preventiva para evitar AttributeError
         self.resultados = None 
@@ -78,20 +80,19 @@ class DetectorMaos:
                     for p1, p2 in self.conexoes:
                         cv2.line(imagem, pontos_px[p1], pontos_px[p2], self.cor_linhas, 2)
                     
-                    # Desenha os pontos de referência
+                    # Desenha os pontos de referência utilizando self.raio_ponto
                     for pt in pontos_px:
-                        cv2.circle(imagem, pt, 5, self.cor_pontos, cv2.FILLED)
+                        cv2.circle(imagem, pt, self.raio_ponto, self.cor_pontos, cv2.FILLED)
         return imagem
             
-    def encontrarPontos(self, imagem, mao_num=0, desenho=True, cor=(255,0,255), raio=7, ponto_detectado=0):
+    def encontrarPontos(self, imagem, mao_num=0, desenho=True, cor_destaque=(255,0,255), pontos_detectados=None):
         """
         Função responsável por encontrar os pontos de referência das mãos na imagem
         :param imagem: Imagem capturada
         :param mao_num: Número da mão a ser analisada (0 para a primeira mão, 1 para a segunda mão, etc.)
-        :param desenho: desenhar o ponto encontrado
-        :param cor: Cor dos pontos de referência das mãos (BGR)
-        :param raio: Raio do circulo do ponto
-        :param ponto_detectado: Ponto a ser detectado
+        :param desenho: desenhar o(s) ponto(s) em destaque
+        :param cor_destaque: Cor de destaque para os pontos específicos solicitados (BGR)
+        :param pontos_detectados: Lista de IDs dos pontos a serem destacados. Se None, não destaca pontos extras.
         :return: Lista com pontos detectados
         """
         # Lista com os pontos detectados
@@ -109,15 +110,18 @@ class DetectorMaos:
                 centro_X, centro_Y = int(ponto.x * largura), int(ponto.y * altura)
                 lista_pontos.append([id, centro_X, centro_Y])
                 
-                # Desenhar o ponto na imagem
-                if desenho:
-                    if id == ponto_detectado:
-                        cv2.circle(imagem, (centro_X, centro_Y), raio, cor, cv2.FILLED)
+                # Desenhar o ponto de destaque na imagem, se solicitado
+                if desenho and pontos_detectados is not None:
+                    # Verifica se o ID atual está na lista de pontos desejados
+                    if id in pontos_detectados:
+                        # Utiliza o raio padrão configurado no __init__ + um incremento visual
+                        cv2.circle(imagem, (centro_X, centro_Y), self.raio_ponto + 3, cor_destaque, cv2.FILLED)
         return lista_pontos
 
 def main():
     cap = cv2.VideoCapture(0)
-    detector = DetectorMaos(cor_pontos=(0, 255, 0), cor_linhas=(0, 0, 255))
+    # Inicializa a classe configurando também o raio padrão dos pontos
+    detector = DetectorMaos(cor_pontos=(0, 255, 0), cor_linhas=(0, 0, 255), raio_ponto=5)
     
     # Validação do estado da câmera
     while cap.isOpened():
@@ -128,7 +132,9 @@ def main():
             
         imagem = cv2.flip(imagem, 1)
         imagem = detector.encontrar_maos(imagem)
-        lista_pontos = detector.encontrarPontos(imagem, mao_num=0, desenho=True)
+        
+        # Testando o novo parâmetro: Destacando as pontas do indicador (8) e do polegar (4)
+        lista_pontos = detector.encontrarPontos(imagem, mao_num=0, desenho=True, pontos_detectados=[4, 8])
         
         cv2.imshow("Captura", imagem)
         
